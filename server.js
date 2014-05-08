@@ -30,7 +30,6 @@ var db = new sqlite3.Database('./piTemps.db');
 // Write a any number of temperature record's in JSON format to database table.
 function insertTemps(err, data) {
     if (!err) {
-        console.log(data.temperature_record)
         for (var i=0; i<config.sensors.length; i++){
             var d = data.temperature_record[i];
             d.unix_time = data.now;
@@ -52,7 +51,6 @@ function readTemps(callback) {
         };
     async.map(config.sensors, readTempFile, function(err, results){
         data.temperature_record = results;
-        console.log(data);
         // Execute call back with data
         callback(0, data);
     })
