@@ -12,6 +12,7 @@
         var chart; // global chart variable
 
          // Get data from Pi NodeJS server
+         /*
         function getData() {
             $.getJSON('./temperature_now.json?sensorid=0', function(data) {
                 //alert(data.unix_time);
@@ -23,12 +24,41 @@
                 // Repeat this function call after 1 second
                 setTimeout(getData, 1000);
             });
+        }*/
+        function getData(){
+            $.getJSON('./temperature_now.json', function(data) {
+                var now = data.now;
+                for (var i=0; i<data.temperature_record.length; i++){   
+                    var sensorid = data.temperature_record[i].sensor_id;
+                    var celsius = data.temperature_record[i].celsius;
+                    var series = chart.series[sensorid];
+                    var shift = series.data.length > 20;
+                    chart.series[sensorid].addPoint([now, celsius], true, shift);
+                }
+                // Repeat this function call after 1 second
+                setTimeout(getData, 1000);
+            });
+        }
+        function getSensors() {
+            $.getJSON('/sensors.json', function(data) {
+                for (var i in data.sensor_record[0]) {
+                    var sensor = data.sensor_record[0][i];
+                    var series = {
+                        id: 'series',
+                        name: sensor.name + ' (\u00B1' + sensor.celsius_accuracy + '\u00B0C)',
+                        data: []
+                    };
+                    chart.addSeries(series);
+                }
+
+            });
         }
     </script>
 
     <script type="text/javascript">
         // Configure the plot
         $(document).ready(function() {
+            getSensors()
             chart = new Highcharts.Chart({
                 chart: {
                     renderTo: 'container',
@@ -57,10 +87,6 @@
                         margin: 15
                     }
                 },
-                series: [{
-                    name: 'Local sensor 0 - DS18B20 (\u00B10.5\u00B0C)',
-                    data: []
-                }]
             });
         });
     </script>

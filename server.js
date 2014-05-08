@@ -14,6 +14,9 @@ var fs = require('fs');
 var sys = require('sys');
 var http = require('http');
 var sqlite3 = require('sqlite3');
+var async = require('async');
+var config = require('./config');
+
 
 // Use node-static module to server chart for client-side dynamic graph
 var nodestatic = require('node-static');
@@ -24,59 +27,66 @@ var staticServer = new nodestatic.Server(".");
 // Setup database connection for logging
 var db = new sqlite3.Database('./piTemps.db');
 
-// Write a single temperature record in JSON format to database table.
-function insertTemp(err, data) {
+// Write a any number of temperature record's in JSON format to database table.
+function insertTemps(err, data) {
     if (!err) {
-        var d = data.temperature_record[0];
-
-        // data is a javascript object
-        var statement = db.prepare("INSERT INTO temperature_records(sensor_id, unix_time, celsius) VALUES (?, ?, ?)");
-        // Insert values into prepared statement
-        statement.run(d.sensor_id, d.unix_time, d.celsius);
-        // Execute the statement
-        statement.finalize();
+        console.log(data.temperature_record)
+        for (var i=0; i<config.sensors.length; i++){
+            var d = data.temperature_record[i];
+            d.unix_time = data.now;
+            // data is a javascript object
+            var statement = db.prepare("INSERT INTO temperature_records(sensor_id, unix_time, celsius) VALUES (?, ?, ?)");
+            // Insert values into prepared statement
+            statement.run(d.sensor_id, d.unix_time, d.celsius);
+            // Execute the statement
+            statement.finalize();
+        }
     }
 }
 
-// Read current temperature from sensor
-function readTemp(callback) {
-    fs.readFile('/sys/bus/w1/devices/28-00000400a88a/w1_slave', function(err, buffer) {
-        // Add date/time to temperature
-        var data = {
-            temperature_record: [{
-                sensor_id: 0,
-                unix_time: Date.now()
-            }]
+function readTemps(callback) {
+    // Add date/time to temperature
+    var data = {
+            temperature_record: [],
+            now : Date.now()
         };
-
-        if (err) {
-            console.error(err);
-            callback(1, data);
-        } else {
-            // Read data from file (using fast node ASCII encoding).
-            var data = buffer.toString('ascii').split(" "); // Split by space
-
-            // Extract temperature from string and divide by 1000 to give celsius
-            var temp = parseFloat(data[data.length - 1].split("=")[1]) / 1000.0;
-
-            // Round to one decimal place
-            temp = Math.round(temp * 10) / 10;
-
-            // Add date/time to temperature
-            data.celsius = temp;
-
-            // Execute call back with data
-            callback(0, data);
-        }
-    });
+    async.map(config.sensors, readTempFile, function(err, results){
+        data.temperature_record = results;
+        console.log(data);
+        // Execute call back with data
+        callback(0, data);
+    })
 };
 
+function readTempFile(sensor, callback){
+    fs.readFile(sensor.path, function(err, buffer) {
+            if (err) {
+                console.error(err);
+                callback(1, err);
+            } else {
+                // Read data from file (using fast node ASCII encoding).
+                 var raw = buffer.toString('ascii').split(" "); // Split by space
+
+                // Extract temperature from string and divide by 1000 to give celsius
+                var temp = parseFloat(raw[raw.length - 1].split("=")[1]) / 1000.0;
+
+                // Round to one decimal place
+                temp = Math.round(temp * 10) / 10;
+                // Add date/time to temperature
+                var item = {}
+                item.celsius = temp;
+                item.sensor_id = sensor.id;
+                callback(null, item);
+            }
+        });
+}
+
 // Create a wrapper function which we'll use specifically for logging
-function logTemp(interval) {
+function logTemps(interval) {
     // Call the readTemp function with the insertTemp function as output to get initial reading
-    readTemp(insertTemp);
+    readTemps(insertTemps);
     // Set the repeat interval (milliseconds). Third argument is passed as callback function to first (i.e. readTemp(insertTemp)).
-    setInterval(readTemp, interval, insertTemp);
+    setInterval(readTemps, interval, insertTemps);
 };
 
 // Get temperature records from database
@@ -170,7 +180,7 @@ var server = http.createServer(
 
         // Test to see if it's a request for current temperature   
         if (pathfile == '/temperature_now.json') {
-            readTemp(function(err, data) {
+            readTemps(function(err, data) {
                 response.writeHead(200, {
                     "Content-type": "application/json"
                 });
@@ -230,7 +240,7 @@ var server = http.createServer(
 
                     // Respond to the client
                     response.writeHead(err.status, err.headers);
-                    response.end('Error 404 - file not found');
+                    response.end("<a href='/temperature_log.htm'>Temp Log</a><p><a href='/temperature_plot.htm'> Temp Plot</a>");
                     return;
                 }
                 return;
@@ -240,12 +250,12 @@ var server = http.createServer(
 
 // Start temperature logging (every 5 min).
 var msecs = (60 * 5) * 1000; // log interval duration in milliseconds
-logTemp(msecs);
+logTemps(msecs);
 // Send a message to console
 console.log('Server is logging to database at ' + msecs + 'ms intervals');
 // Enable server
-server.listen(8000);
+server.listen(config.port);
 // Log message
-console.log('Server running at http://localhost:8000');
-console.log('Real time data plot: http://localhost:8000/temperature_plot.htm');
-console.log('Data log: http://localhost:8000/temperature_log.htm');
+console.log('Server running at http://localhost:' + config.port);
+console.log('Real time data plot: http://localhost:'+ config.port +'/temperature_plot.htm');
+console.log('Data log: http://localhost:'+ config.port +'/temperature_log.htm');

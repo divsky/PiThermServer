@@ -8,10 +8,9 @@
 echo "Creating sensor_records table"
 sqlite3 piTemps.db 'DROP TABLE sensor_records;'
 sqlite3 piTemps.db 'CREATE TABLE sensor_records(sensor_id integer primary key, name varchar, celsius_accuracy real);'
-echo "Adding config for one local sensor and two remote sensors"
+echo "Adding config for two local sensors"
 sqlite3 piTemps.db 'INSERT INTO sensor_records(sensor_id, name, celsius_accuracy) VALUES (0, "Local sensor 0 - DS18B20", 0.5);'
-sqlite3 piTemps.db 'INSERT INTO sensor_records(sensor_id, name, celsius_accuracy) VALUES (1, "Remote sensor 1", 0.1);'
-sqlite3 piTemps.db 'INSERT INTO sensor_records(sensor_id, name, celsius_accuracy) VALUES (2, "Remote sensor 2", 1.5);'
+sqlite3 piTemps.db 'INSERT INTO sensor_records(sensor_id, name, celsius_accuracy) VALUES (1, "Local sensor 1 - DS18B20", 0.5);'
 
 echo "Creating temperature_records table"
 sqlite3 piTemps.db 'DROP TABLE temperature_records;'
